@@ -1,54 +1,9 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <ctype.h>
+#include "symnmf.h"
 
-static int k = 0;
-static int N = 0;
-static int d = 1;
-static struct vector *backup_vectors;
 
-const double beta = 0.5;
-const int max_iter = 1000;
-const double eps = 0.0001;
-
-/* Structs definitions */
-struct entry {
-    double value;
-    struct entry *next;
-};
-
-struct vector {
-    struct vector *next;
-    struct entry *entries;
-};
-
-/* Functions declarations */
-
-int main(int argc, char *argv[]);
-
-/* Goals */
-double** compute_similarity_matrix(struct vector* vectors);
-double* compute_degree_matrix(double** A);
-double** compute_laplacian_matrix(double** A, double* D);
-double** initialize_H(double** W);
-double** optimize_H(double** W);
-
-/* Argument reading and processing functions */
-struct vector* read_data_points();
-void mem_error();
-void free_entries(struct entry *head);
-void free_matrix(double** matrix, int rows);
-void print_matrix(double** matrix, int rows, int cols);
-void print_diagonal_matrix(double* diagonal, int size);
-
-/* Computational functions */
-double squared_dist(struct vector u, struct vector v);
-double** matrix_multiply(double** A, double** B, int m, int n, int p);
-double** transpose(double** matrix, int rows, int cols);
-
-/* Algorithm */
 int main(int argc, char *argv[]) {
+
+    struct vector *data_points;
 
     if (argc != 3) {
         printf("Usage: %s <path_to_txt_file> <k>\n", argv[0]);
@@ -62,41 +17,72 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* Redirect stdin to read from the file */
-    freopen(argv[1], "r", stdin);
-    if (!stdin) {
-        printf("Failed to open file: %s\n", argv[1]);
-        return 1;
+    return 0;
+}
+
+struct vector* read_data_points(char* file_name){
+
+    FILE *ifp = NULL;
+    struct vector *head_vec, *curr_vec;
+    struct entry *head_entry, *curr_entry;
+    double n;
+    char c;
+
+    ifp = fopen(file_name, "r" );
+
+    head_entry = malloc(sizeof(struct entry));
+    if (head_entry == NULL)     /* Memory allocation failed */
+        mem_error();
+    curr_entry = head_entry;
+    curr_entry->next = NULL;
+
+    curr_vec = malloc(sizeof(struct vector));
+    if (curr_vec == NULL)       /* Memory allocation failed */
+        mem_error();
+    curr_vec->next = NULL;
+    head_vec = curr_vec;
+    backup_vectors = head_vec;
+
+    while (fscanf(ifp, "%lf%c", &n, &c) == 2) {
+
+        /* We have read all the entries for the current vector */
+        if (c == '\n') {
+
+            curr_entry->value = n;
+            curr_vec->entries = head_entry;
+            curr_vec->next = calloc(1, sizeof(struct vector));
+            if (curr_vec->next == NULL)     /* Memory allocation failed */
+                mem_error();
+            curr_vec = curr_vec->next;
+            curr_vec->next = NULL;
+            head_entry = malloc(sizeof(struct entry));
+            if (head_entry == NULL)         /* Memory allocation failed */
+                mem_error();
+            curr_entry = head_entry;
+            curr_entry->next = NULL;
+
+            /* Count the number of vectors N */
+            N++;
+            continue;
+        }
+
+        /* Read the next entry of the current vector */
+        curr_entry->value = n;
+        curr_entry->next = malloc(sizeof(struct entry));
+        if (curr_entry == NULL)         /* Memory allocation failed */
+            mem_error();
+        curr_entry = curr_entry->next;
+        curr_entry->next = NULL;
+
+        /* Count the dimension d */
+        if (N == 0)
+            d++;
     }
 
-    /* Read data points */
-    struct vector *data_points = read_data_points();
+    free_entries(head_entry);
+    fclose( ifp );
 
-    /* Compute matrices */
-    double **A = compute_similarity_matrix(data_points);
-    double *D = compute_degree_matrix(A);
-    double **W = compute_laplacian_matrix(A, D);
-
-    /* Optimize H */
-    double **H = optimize_H(W);
-
-    /* Print matrices */
-    printf("A:\n");
-    print_matrix(A, N, N);
-    printf("D:\n");
-    print_diagonal_matrix(D, N);
-    printf("W:\n");
-    print_matrix(W, N, N);
-    printf("H:\n");
-    print_matrix(H, N, k);
-
-    /* Free allocated memory */
-    free_matrix(A, N);
-    free_matrix(W, N);
-    free(D);
-    free_matrix(H, N);
-
-    return 0;
+    return head_vec;
 }
 
 double** compute_similarity_matrix(struct vector* vectors) {
@@ -136,6 +122,9 @@ double* compute_degree_matrix(double** A) {
 double** compute_laplacian_matrix(double** A, double* D) {
     int i = 0;
 
+    double **intermediate;
+    double **W;
+
     /* Compute D^{-1/2} as a diagonal matrix */
     double** D_inv_sqrt = (double**)malloc(N * sizeof(double*));
     if (D_inv_sqrt == NULL)      /* Memory allocation failed */
@@ -149,10 +138,10 @@ double** compute_laplacian_matrix(double** A, double* D) {
     }
 
     /* Compute intermediate matrix: D^{-1/2} * A */
-    double **intermediate = matrix_multiply(D_inv_sqrt, A, N, N, N);
+    intermediate = matrix_multiply(D_inv_sqrt, A, N, N, N);
 
     /* Compute W = (D^{-1/2} * A) * D^{-1/2} */
-    double **W = matrix_multiply(intermediate, D_inv_sqrt, N, N, N);
+    W = matrix_multiply(intermediate, D_inv_sqrt, N, N, N);
 
     /* Free allocated memory */
     free_matrix(D_inv_sqrt, N);
@@ -164,6 +153,7 @@ double** compute_laplacian_matrix(double** A, double* D) {
 double** initialize_H(double** W) {
     int i = 0, j = 0;
     double m = 0.0;
+    double **H;
 
     /* Calculate the average of all entries of W */
     for (; i < N; i++) {
@@ -173,7 +163,7 @@ double** initialize_H(double** W) {
     m /= pow(N, 2);
 
     /* Allocate memory for H */
-    double **H = (double**)malloc(N * sizeof(double*));
+    H = (double**)malloc(N * sizeof(double*));
     if (H == NULL)
         mem_error();
 
@@ -197,6 +187,8 @@ double** optimize_H(double** W) {
     double** temp2 = NULL;
     double** temp3 = NULL;
     double** H_prev = (double**)malloc(N * sizeof(double*));
+    int iteration;
+    double diff;
     if (H_prev == NULL)
         mem_error();
 
@@ -206,7 +198,7 @@ double** optimize_H(double** W) {
             mem_error();
     }
 
-    int iteration = 0;
+    iteration = 0;
     while (iteration < max_iter) {
         /* Copy current H to H_prev */
         for (i = 0; i < N; i++) {
@@ -225,7 +217,7 @@ double** optimize_H(double** W) {
         }
 
         /* Check for convergence */
-        double diff = 0.0;
+        diff = 0.0;
         for (i = 0; i < N; i++) {
             for (j = 0; j < k; j++)
                 diff += pow(H[i][j] - H_prev[i][j], 2);
@@ -247,67 +239,6 @@ double** optimize_H(double** W) {
     free_matrix(H_prev, N);
 
     return H;
-}
-
-struct vector* read_data_points(){
-
-    struct vector *head_vec, *curr_vec;
-    struct entry *head_entry, *curr_entry;
-    double n;
-    char c;
-
-    head_entry = malloc(sizeof(struct entry));
-    if (head_entry == NULL)     /* Memory allocation failed */
-        mem_error();
-    curr_entry = head_entry;
-    curr_entry->next = NULL;
-
-    curr_vec = malloc(sizeof(struct vector));
-    if (curr_vec == NULL)       /* Memory allocation failed */
-        mem_error();
-    curr_vec->next = NULL;
-    head_vec = curr_vec;
-    backup_vectors = head_vec;
-
-    while (scanf("%lf%c", &n, &c) == 2) {
-
-        /* We have read all the entries for the current vector */
-        if (c == '\n') {
-
-            curr_entry->value = n;
-            curr_vec->entries = head_entry;
-            curr_vec->next = calloc(1, sizeof(struct vector));
-            if (curr_vec->next == NULL)     /* Memory allocation failed */
-                mem_error();
-            curr_vec = curr_vec->next;
-            curr_vec->next = NULL;
-            head_entry = malloc(sizeof(struct entry));
-            if (head_entry == NULL)         /* Memory allocation failed */
-                mem_error();
-            curr_entry = head_entry;
-            curr_entry->next = NULL;
-
-            /* Count the number of vectors N */
-            N++;
-            continue;
-        }
-
-        /* Read the next entry of the current vector */
-        curr_entry->value = n;
-        curr_entry->next = malloc(sizeof(struct entry));
-        if (curr_entry == NULL)         /* Memory allocation failed */
-            mem_error();
-        curr_entry = curr_entry->next;
-        curr_entry->next = NULL;
-
-        /* Count the dimension d */
-        if (N == 0)
-            d++;
-    }
-
-    free_entries(head_entry);
-
-    return head_vec;
 }
 
 void mem_error(){
