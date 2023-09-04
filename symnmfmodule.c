@@ -3,65 +3,83 @@
 
 #include "symnmf.h"
 
+/** declarations **/
+
+static PyObject* sym_module_imp(PyObject *self, PyObject *args);
+
+static PyObject* ddg_module_imp(PyObject *self, PyObject *args);
+
+static PyObject* norm_module_imp(PyObject *self, PyObject *args);
+
+static PyObject* symnmf_module_imp(PyObject *self, PyObject *args);
+
+static PyObject* convert_to_python_list_of_lists(double** matrix, int n, int m);
+static PyObject* convert_to_python_list(double* array, int n);
+static double** convert_to_c_2d_array(PyObject *list_of_lists);
+
+/** implementations **/
+
 static PyObject* sym_module_imp(PyObject *self, PyObject *args) {  
-    struct vector* data_points;
+    struct vector* data_points = NULL;
     char* file_path;
+    int n;
     if(!PyArg_ParseTuple(args, "s", &file_path)) {
         return NULL;
     }
-    printf("path is: %s\n", file_path);
     data_points = read_data_points(file_path);
-    
-
-    return Py_BuildValue("O", data_points);
+    n = getN();
+    double** sym_matrix = compute_similarity_matrix(data_points);
+    return Py_BuildValue("O", convert_to_python_list_of_lists(sym_matrix, n, n));
 }
 
 static PyObject* ddg_module_imp(PyObject *self, PyObject *args)
 {
-
-    if(!PyArg_ParseTuple(args, "", NULL)) {
+    struct vector* data_points = NULL;
+    char* file_path;
+    int n;
+    if(!PyArg_ParseTuple(args, "s", &file_path)) {
         return NULL;
     }
-
-    return Py_BuildValue("O", NULL);
+    data_points = read_data_points(file_path);
+    n = getN();
+    double** sym_matrix = compute_similarity_matrix(data_points);
+    double* ddg_list = compute_degree_matrix(sym_matrix);
+    return Py_BuildValue("O", convert_to_python_list(ddg_list, n));
 }
 
 static PyObject* norm_module_imp(PyObject *self, PyObject *args)
 {
-
-    if(!PyArg_ParseTuple(args, "", NULL)) {
+    struct vector* data_points = NULL;
+    char* file_path;
+    int n;
+    if(!PyArg_ParseTuple(args, "s", &file_path)) {
         return NULL;
     }
-
-    return Py_BuildValue("O", NULL);
+    data_points = read_data_points(file_path);
+    n = getN();
+    double** sym_matrix = compute_similarity_matrix(data_points);
+    double* ddg_list = compute_degree_matrix(sym_matrix);
+    double** laplacian = compute_laplacian_matrix(sym_matrix, ddg_list);
+    return Py_BuildValue("O", convert_to_python_list_of_lists(laplacian, n, n));
 }
 
 static PyObject* symnmf_module_imp(PyObject *self, PyObject *args)
 {
 
-    if(!PyArg_ParseTuple(args, "", NULL)) {
+    double** W;
+    double** H;
+    PyObject* W_P;
+    PyObject* H_P;
+    int n, k;
+
+    if(!PyArg_ParseTuple(args, "OOii", &W_P, &H_P, &n, &k)) {
         return NULL;
     }
+    W = convert_to_c_2d_array(W_P);
+    H = convert_to_c_2d_array(H_P);
 
-    return Py_BuildValue("O", NULL);
-}
-
-static PyObject* get_list(PyObject* self, PyObject* args)
-{
-    int N,r;
-    PyObject* python_val;
-    PyObject* python_int;
-    if (!PyArg_ParseTuple(args, "i", &N)) {
-        return NULL;
-    }
-    python_val = PyList_New(N);
-    for (int i = 0; i < N; ++i)
-    {
-        r = i;
-        python_int = Py_BuildValue("i", r);
-        PyList_SetItem(python_val, i, python_int);
-    }
-    return python_val;
+    H = optimize_H(W, H, n, k);
+    return Py_BuildValue("O", convert_to_python_list_of_lists(H, n, k));
 }
 
 static PyMethodDef symnmfMethods[] = {
@@ -69,7 +87,6 @@ static PyMethodDef symnmfMethods[] = {
     {"ddg", ddg_module_imp, METH_VARARGS, PyDoc_STR("Calculate and output the Diagonal Degree Matrix.")},
     {"norm", norm_module_imp, METH_VARARGS, PyDoc_STR("Calculate and output the normalized similarity matrix.")},
     {"symnmf", symnmf_module_imp, METH_VARARGS, PyDoc_STR("An implementation of symnmf.")},
-    {"get_list", get_list, METH_VARARGS, PyDoc_STR("get list of ints")},
     {NULL, NULL, 0, NULL}
 };
 
@@ -90,3 +107,57 @@ PyMODINIT_FUNC PyInit_symnmfmodule(void)
     }
     return m;
 }
+
+
+/** conversion functions **/
+static PyObject* convert_to_python_list_of_lists(double** matrix, int n, int m){
+    PyObject *list_of_lists;
+
+    list_of_lists = PyList_New(n);
+    
+    int i,j;
+    for (i = 0; i < n; i++) {
+        PyList_SetItem(list_of_lists, i, PyList_New(m));
+        for (j = 0; j < m; j++) {
+            PyObject* python_double = Py_BuildValue("d", matrix[i][j]);
+            PyList_SetItem(PyList_GetItem(list_of_lists, i), j, python_double);
+        }
+    }
+
+    return list_of_lists;
+}
+
+static PyObject* convert_to_python_list(double* array, int n){
+    PyObject* list;
+
+    list = PyList_New(n);
+    
+    int i;
+    for (i = 0; i < n; i++) {
+        PyList_SetItem(list, i, Py_BuildValue("d", array[i]));
+    }
+
+    return list;
+}
+
+static double** convert_to_c_2d_array(PyObject* list_of_lists) {
+    PyObject* row;
+    PyObject* entry;
+
+    int n = PyObject_Length(list_of_lists);
+    int m = PyObject_Length(PyList_GetItem(list_of_lists, 0));
+
+    double** matrix = calloc(n, sizeof(double*));
+
+    int i, j;
+    for (i = 0; i < n; i++) {
+        row = PyList_GetItem(list_of_lists, i);
+        matrix[i] = calloc(m, sizeof(double));
+        for (j = 0; j < m; j++) {
+            entry = PyList_GetItem(row, j);
+            matrix[i][j] = PyFloat_AsDouble(entry);
+        }
+    }
+    return matrix;
+}
+
