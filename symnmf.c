@@ -1,9 +1,30 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <ctype.h>
 #include "symnmf.h"
+
+static int d = 1;
+static int N = 0;
+static int k = 0;
+static const double beta = 0.5;
+static const int max_iter = 1000;
+static const double eps = 0.0001;
+
+static struct vector *backup_vectors;
+
+/** behind the scenes code**/
+void mem_error();
+void free_entries(struct entry *head);
+void free_matrix(double** matrix, int rows);
+
+/* Computational functions */
+double squared_dist(struct vector u, struct vector v);
+double** matrix_multiply(double** A, double** B, int m, int n, int p);
+double** transpose(double** matrix, int rows, int cols);
 
 
 int main(int argc, char *argv[]) {
-
-    struct vector *data_points;
 
     if (argc != 3) {
         printf("Usage: %s <path_to_txt_file> <k>\n", argv[0]);
@@ -150,49 +171,19 @@ double** compute_laplacian_matrix(double** A, double* D) {
     return W;
 }
 
-double** initialize_H(double** W) {
+double** optimize_H(double** W, double** H, int n, int k) {
     int i = 0, j = 0;
-    double m = 0.0;
-    double **H;
-
-    /* Calculate the average of all entries of W */
-    for (; i < N; i++) {
-        for (j = 0; j < N; j++)
-            m += W[i][j];
-    }
-    m /= pow(N, 2);
-
-    /* Allocate memory for H */
-    H = (double**)malloc(N * sizeof(double*));
-    if (H == NULL)
-        mem_error();
-
-    for (i = 0; i < N; i++) {
-        H[i] = (double*)malloc(k * sizeof(double));
-        if (H[i] == NULL)
-            mem_error();
-
-        /* Randomly initialize H with values from the interval [0, 2 * sqrt(m/k)] */
-        for (j = 0; j < k; j++)
-            H[i][j] = ((double)rand() / RAND_MAX) * 2 * sqrt(m / k);
-    }
-    return H;
-}
-
-double** optimize_H(double** W) {
-    int i = 0, j = 0;
-    double** H = initialize_H(W);
-    double** H_transpose = transpose(H, N, k);
+    double** H_transpose = transpose(H, n, k);
     double** temp1 = NULL;
     double** temp2 = NULL;
     double** temp3 = NULL;
-    double** H_prev = (double**)malloc(N * sizeof(double*));
+    double** H_prev = (double**)malloc(n * sizeof(double*));
     int iteration;
     double diff;
     if (H_prev == NULL)
         mem_error();
 
-    for (; i < N; i++) {
+    for (; i < n; i++) {
         H_prev[i] = (double*)malloc(k * sizeof(double));
         if (H_prev[i] == NULL)
             mem_error();
@@ -201,42 +192,43 @@ double** optimize_H(double** W) {
     iteration = 0;
     while (iteration < max_iter) {
         /* Copy current H to H_prev */
-        for (i = 0; i < N; i++) {
+        for (i = 0; i < n; i++) {
             for (j = 0; j < k; j++)
                 H_prev[i][j] = H[i][j];
         }
 
         /* Update H using the provided rule */
-        temp1 = matrix_multiply(W, H, N, N, k);
-        temp2 = matrix_multiply(H, H_transpose, N, k, N);
-        temp3 = matrix_multiply(temp2, H, N, N, k);
+        temp1 = matrix_multiply(W, H, n, n, k);
+        temp2 = matrix_multiply(H, H_transpose, n, k, n);
+        temp3 = matrix_multiply(temp2, H, n, n, k);
 
-        for (i = 0; i < N; i++) {
+        for (i = 0; i < n; i++) {
             for (j = 0; j < k; j++)
                 H[i][j] *= (1 - beta + (beta * temp1[i][j] / temp3[i][j]));
         }
 
         /* Check for convergence */
         diff = 0.0;
-        for (i = 0; i < N; i++) {
+        for (i = 0; i < n; i++) {
             for (j = 0; j < k; j++)
                 diff += pow(H[i][j] - H_prev[i][j], 2);
         }
 
         /* Free temp matrices */
-        free_matrix(temp1, N);
-        free_matrix(temp2, N);
-        free_matrix(temp3, N);
+        free_matrix(temp1, n);
+        free_matrix(temp2, n);
+        free_matrix(temp3, n);
 
         if (diff < eps)
             break;
 
-        H_transpose = transpose(H, N, k);
+        H_transpose = transpose(H, n, k);
         iteration++;
+
     }
 
     /* Free allocated memory for H_prev */
-    free_matrix(H_prev, N);
+    free_matrix(H_prev, n);
 
     return H;
 }
@@ -341,4 +333,27 @@ double** transpose(double** matrix, int rows, int cols) {
     }
 
     return transposed;
+}
+
+void print_vectors(struct vector *vectors) {
+    struct vector* curr_vec = vectors;
+
+    while (curr_vec != NULL) {
+        struct entry* entry = curr_vec->entries;
+        while (entry != NULL) {
+            printf("%.4f ", entry->value);
+            entry = entry->next;
+        }
+        printf("\n");
+        fflush(stdout); 
+        curr_vec = curr_vec->next;
+    }
+}
+
+int getN(){
+    return N;
+}
+
+int getK(){
+    return k;
 }
