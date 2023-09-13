@@ -2,41 +2,77 @@
 #include <stdlib.h>
 #include <math.h>
 #include <ctype.h>
+#include <string.h>
 #include "symnmf.h"
 
+/* dimension of data points */
 static int d = 1;
+/* number of data points */
 static int N = 0;
+/* input argument */
 static int k = 0;
+
+/* constants for the SymNMF algorithm */
 static const double beta = 0.5;
 static const int max_iter = 1000;
 static const double eps = 0.0001;
 
 static struct vector *backup_vectors;
 
-/** behind the scenes code**/
-void mem_error();
-void free_entries(struct entry *head);
-void free_matrix(double** matrix, int rows);
-
 /* Computational functions */
 double squared_dist(struct vector u, struct vector v);
 double** matrix_multiply(double** A, double** B, int m, int n, int p);
 double** transpose(double** matrix, int rows, int cols);
 
+void print_vector(struct vector vector);
 
+/*note in 2.9.2 in project_NMF.pdf we are told we don't need to validate args.*/
 int main(int argc, char *argv[]) {
 
-    if (argc != 3) {
+    char* file_path = argv[3];
+    char* goal = argv[2];
+    struct vector *data_points;
+    double **A;
+    double *D;
+    double **W;
+
+    if (argc != 4) {
         printf("Usage: %s <path_to_txt_file> <k>\n", argv[0]);
         return 1;
     }
 
     /* Read k from command line arguments */
-    k = atoi(argv[2]);
+    k = atoi(argv[1]);
     if (k <= 0) {
         printf("Invalid value for k. It should be a positive integer.\n");
         return 1;
     }
+
+    /* Read data points */
+    data_points = read_data_points(file_path);
+
+    /* Compute matrices */
+    A = compute_similarity_matrix(data_points, N, d);
+    D = compute_degree_matrix(A);
+    W = compute_laplacian_matrix(A, D);
+
+    if (!strcmp(goal, "sym")){ /**why we need to negate?*/
+        print_matrix(A, N, N);
+    }
+    if (!strcmp(goal, "ddg")){
+        print_diagonal_matrix(D, N);
+    }
+    if (!strcmp(goal, "norm")){
+        print_matrix(W, N, N);
+    }
+
+    /* Free allocated memory */
+    free_matrix(A, N);
+    free_matrix(W, N);
+    free(D);
+    free_vectors(data_points);
+    free_vectors(backup_vectors);
+    
 
     return 0;
 }
@@ -106,18 +142,22 @@ struct vector* read_data_points(char* file_name){
     return head_vec;
 }
 
-double** compute_similarity_matrix(struct vector* vectors) {
+double** compute_similarity_matrix(struct vector* vectors, int N_, int d_) {
     int i = 0, j = 0;
     struct vector *vec_i = vectors, *vec_j = vectors;
-    double **A = (double **) malloc(N * sizeof(double *));
+    double **A;
+    N = N_;
+    d = d_;
+    A = (double **) malloc(N * sizeof(double *));
     if (A == NULL)      /* Memory allocation failed */
         mem_error();
 
     for (; i < N; vec_i = vec_i->next, i++) {
         A[i] = (double *) malloc(N * sizeof(double));
         for (j = 0; j < N; vec_j = vec_j->next, j++) {
-            if (i != j)
-                A[i][j] = exp(-squared_dist(*vec_i, *vec_j) / 2); /* MIGHT BE PROBLEMATIC */
+            if (i != j){
+                A[i][j] = exp(-squared_dist(*vec_i, *vec_j) / 2); 
+            }
             else
                 A[i][j] = 0.0;
         }
@@ -239,6 +279,16 @@ void mem_error(){
     exit(1);
 }
 
+void free_vectors(struct vector *head) {
+    if (head != NULL){
+        free_entries(head->entries);
+        free_vectors(head->next);
+        free(head);
+    }
+    head = NULL;
+    backup_vectors = head;
+}
+
 void free_entries(struct entry *head) {
     if (head != NULL){
         free_entries(head->next);
@@ -348,6 +398,16 @@ void print_vectors(struct vector *vectors) {
         fflush(stdout); 
         curr_vec = curr_vec->next;
     }
+}
+
+void print_vector(struct vector vector) {
+    struct entry* entry = vector.entries;
+    while (entry != NULL) {
+        printf("%.4f ", entry->value);
+        entry = entry->next;
+    }
+    printf("\n");
+    fflush(stdout); 
 }
 
 int getN(){
