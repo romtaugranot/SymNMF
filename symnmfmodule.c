@@ -3,6 +3,9 @@
 
 #include "symnmf.h"
 
+static int N = 0;
+static int d = 0;
+
 /** declarations **/
 
 static PyObject* sym_module_imp(PyObject *self, PyObject *args);
@@ -14,35 +17,45 @@ static PyObject* norm_module_imp(PyObject *self, PyObject *args);
 static PyObject* symnmf_module_imp(PyObject *self, PyObject *args);
 
 static PyObject* convert_to_python_list_of_lists(double** matrix, int n, int m);
+
 static PyObject* convert_to_python_list(double* array, int n);
+
 static double** convert_to_c_2d_array(PyObject *list_of_lists);
+
+static struct vector* convert_from_python_to_c(PyObject *list_of_lists);
 
 /** implementations **/
 
 static PyObject* sym_module_imp(PyObject *self, PyObject *args) {  
     struct vector* data_points = NULL;
-    char* file_path;
+    PyObject* data;
     int n;
-    if(!PyArg_ParseTuple(args, "s", &file_path)) {
+    if(!PyArg_ParseTuple(args, "O", &data)) {
         return NULL;
     }
-    data_points = read_data_points(file_path);
-    n = getN();
-    double** sym_matrix = compute_similarity_matrix(data_points);
-    return Py_BuildValue("O", convert_to_python_list_of_lists(sym_matrix, n, n));
+
+    data_points = convert_from_python_to_c(data);
+
+    n = N;
+
+    double** sym_matrix = compute_similarity_matrix(data_points, n, d);
+
+    PyObject* returned = convert_to_python_list_of_lists(sym_matrix, n, n);
+
+    return Py_BuildValue("O", returned);
 }
 
 static PyObject* ddg_module_imp(PyObject *self, PyObject *args)
 {
     struct vector* data_points = NULL;
-    char* file_path;
+    PyObject* data;
     int n;
-    if(!PyArg_ParseTuple(args, "s", &file_path)) {
+    if(!PyArg_ParseTuple(args, "O", &data)) {
         return NULL;
     }
-    data_points = read_data_points(file_path);
-    n = getN();
-    double** sym_matrix = compute_similarity_matrix(data_points);
+    data_points = convert_from_python_to_c(data);
+    n = N;
+    double** sym_matrix = compute_similarity_matrix(data_points, n, d);
     double* ddg_list = compute_degree_matrix(sym_matrix);
     return Py_BuildValue("O", convert_to_python_list(ddg_list, n));
 }
@@ -50,14 +63,14 @@ static PyObject* ddg_module_imp(PyObject *self, PyObject *args)
 static PyObject* norm_module_imp(PyObject *self, PyObject *args)
 {
     struct vector* data_points = NULL;
-    char* file_path;
+    PyObject* data;
     int n;
-    if(!PyArg_ParseTuple(args, "s", &file_path)) {
+    if(!PyArg_ParseTuple(args, "O", &data)) {
         return NULL;
     }
-    data_points = read_data_points(file_path);
-    n = getN();
-    double** sym_matrix = compute_similarity_matrix(data_points);
+    data_points = convert_from_python_to_c(data);
+    n = N;
+    double** sym_matrix = compute_similarity_matrix(data_points, n, d);
     double* ddg_list = compute_degree_matrix(sym_matrix);
     double** laplacian = compute_laplacian_matrix(sym_matrix, ddg_list);
     return Py_BuildValue("O", convert_to_python_list_of_lists(laplacian, n, n));
@@ -161,3 +174,65 @@ static double** convert_to_c_2d_array(PyObject* list_of_lists) {
     return matrix;
 }
 
+static struct vector* convert_from_python_to_c(PyObject *list_of_lists) {
+    PyObject *list;
+    PyObject *item;
+
+    N = PyObject_Length(list_of_lists);
+    d = PyObject_Length(PyList_GetItem(list_of_lists, 0));
+
+    struct vector *head_vec, *curr_vec;
+    struct entry *head_entry, *curr_entry;
+
+    head_entry = malloc(sizeof(struct entry));
+    if (head_entry == NULL) {   /* Memory allocation failed */
+        mem_error();
+    }
+    curr_entry = head_entry;
+    curr_entry->next = NULL;
+
+    curr_vec = malloc(sizeof(struct vector));
+    if (curr_vec == NULL) {   /* Memory allocation failed */
+        mem_error();
+    }
+    curr_vec->next = NULL;
+    head_vec = curr_vec;
+
+    int i,j;
+    for (i = 0; i < N; i++) {
+        list = PyList_GetItem(list_of_lists, i);
+        for (j = 0; j < d; j++) {
+            item = PyList_GetItem(list, j);
+            double num = PyFloat_AsDouble(item);
+            curr_entry->value = num;
+            if (j+1 < d){
+                curr_entry->next = malloc(sizeof(struct entry));
+                if (curr_entry == NULL) {   /* Memory allocation failed */
+                    mem_error();
+                }
+                curr_entry = curr_entry->next;
+            }
+            curr_entry->next = NULL;
+        }
+
+        curr_vec->entries = head_entry;
+        if (i+1<N){
+            curr_vec->next = calloc(1, sizeof(struct vector));
+            if (curr_vec->next == NULL) {   /* Memory allocation failed */
+                mem_error();
+            }
+            curr_vec = curr_vec->next;
+            curr_vec->next = NULL;
+        }
+        head_entry = malloc(sizeof(struct entry));
+        if (head_entry == NULL) {   /* Memory allocation failed */
+            mem_error();
+        }
+        curr_entry = head_entry;
+        curr_entry->next = NULL;
+    }
+
+    free_entries(head_entry);
+
+    return head_vec;
+}
