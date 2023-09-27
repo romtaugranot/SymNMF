@@ -15,8 +15,8 @@ double* compute_degree_matrix(double** A);
 double** compute_laplacian_matrix(double** A, double* D);
 double** optimize_H(double** W, double** H, int n, int k);
 
-/** behind the scenes code**/
-void mem_error();
+/* behind the scenes code*/
+void mem_error(void);
 void free_entries(struct entry *head);
 void free_vectors(struct vector *head);
 void free_matrix(double** matrix, int rows);
@@ -27,5 +27,3 @@ struct vector* read_data_points(char* file_name);
 void print_matrix(double** matrix, int rows, int cols);
 void print_diagonal_matrix(double* diagonal, int size);
 void print_vectors(struct vector *vectors);
-
-int getK();

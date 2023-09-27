@@ -56,15 +56,14 @@ int main(int argc, char *argv[]) {
     D = compute_degree_matrix(A);
     W = compute_laplacian_matrix(A, D);
 
-    if (!strcmp(goal, "sym")){ /**why we need to negate?*/
+    if (!strcmp(goal, "sym")) /*why we need to negate?*/
         print_matrix(A, N, N);
-    }
-    if (!strcmp(goal, "ddg")){
+
+    if (!strcmp(goal, "ddg"))
         print_diagonal_matrix(D, N);
-    }
-    if (!strcmp(goal, "norm")){
+
+    if (!strcmp(goal, "norm"))
         print_matrix(W, N, N);
-    }
 
     /* Free allocated memory */
     free_matrix(A, N);
@@ -72,7 +71,6 @@ int main(int argc, char *argv[]) {
     free(D);
     free_vectors(data_points);
     free_vectors(backup_vectors);
-    
 
     return 0;
 }
@@ -137,7 +135,7 @@ struct vector* read_data_points(char* file_name){
     }
 
     free_entries(head_entry);
-    fclose( ifp );
+    fclose(ifp);
 
     return head_vec;
 }
@@ -273,9 +271,8 @@ double** optimize_H(double** W, double** H, int n, int k) {
     return H;
 }
 
-void mem_error(){
+void mem_error(void) {
     printf("An Error Has Occurred\n");
-
     exit(1);
 }
 
@@ -408,12 +405,4 @@ void print_vector(struct vector vector) {
     }
     printf("\n");
     fflush(stdout); 
-}
-
-int getN(){
-    return N;
-}
-
-int getK(){
-    return k;
 }
