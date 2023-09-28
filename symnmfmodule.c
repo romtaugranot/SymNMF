@@ -186,14 +186,14 @@ static struct vector* convert_from_python_to_c(PyObject *list_of_lists) {
 
     head_entry = malloc(sizeof(struct entry));
     if (head_entry == NULL) {   /* Memory allocation failed */
-        mem_error();
+        print_error();
     }
     curr_entry = head_entry;
     curr_entry->next = NULL;
 
     curr_vec = malloc(sizeof(struct vector));
     if (curr_vec == NULL) {   /* Memory allocation failed */
-        mem_error();
+        print_error();
     }
     curr_vec->next = NULL;
     head_vec = curr_vec;
@@ -208,7 +208,7 @@ static struct vector* convert_from_python_to_c(PyObject *list_of_lists) {
             if (j+1 < d){
                 curr_entry->next = malloc(sizeof(struct entry));
                 if (curr_entry == NULL) {   /* Memory allocation failed */
-                    mem_error();
+                    print_error();
                 }
                 curr_entry = curr_entry->next;
             }
@@ -219,14 +219,14 @@ static struct vector* convert_from_python_to_c(PyObject *list_of_lists) {
         if (i+1<N){
             curr_vec->next = calloc(1, sizeof(struct vector));
             if (curr_vec->next == NULL) {   /* Memory allocation failed */
-                mem_error();
+                print_error();
             }
             curr_vec = curr_vec->next;
             curr_vec->next = NULL;
         }
         head_entry = malloc(sizeof(struct entry));
         if (head_entry == NULL) {   /* Memory allocation failed */
-            mem_error();
+            print_error();
         }
         curr_entry = head_entry;
         curr_entry->next = NULL;

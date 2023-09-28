@@ -5,14 +5,11 @@
 #include <string.h>
 #include "symnmf.h"
 
-/* dimension of data points */
-static int d = 1;
-/* number of data points */
-static int N = 0;
-/* input argument */
-static int k = 0;
+static int d = 1;   /* Dimension of data points */
+static int N = 0;   /* Number of data points */
+static int k = 0;   /* Input argument */
 
-/* constants for the SymNMF algorithm */
+/* Constants for the SymNMF algorithm */
 static const double beta = 0.5;
 static const int max_iter = 1000;
 static const double eps = 0.0001;
@@ -26,7 +23,6 @@ double** transpose(double** matrix, int rows, int cols);
 
 void print_vector(struct vector vector);
 
-/*note in 2.9.2 in project_NMF.pdf we are told we don't need to validate args.*/
 int main(int argc, char *argv[]) {
 
     char* file_path = argv[3];
@@ -36,17 +32,13 @@ int main(int argc, char *argv[]) {
     double *D;
     double **W;
 
-    if (argc != 4) {
-        printf("Usage: %s <path_to_txt_file> <k>\n", argv[0]);
-        return 1;
-    }
+    if (argc != 4)
+        print_error();
 
     /* Read k from command line arguments */
     k = atoi(argv[1]);
-    if (k <= 0) {
-        printf("Invalid value for k. It should be a positive integer.\n");
-        return 1;
-    }
+    if (k <= 0)
+        print_error();
 
     /* Read data points */
     data_points = read_data_points(file_path);
@@ -56,7 +48,7 @@ int main(int argc, char *argv[]) {
     D = compute_degree_matrix(A);
     W = compute_laplacian_matrix(A, D);
 
-    if (!strcmp(goal, "sym")) /*why we need to negate?*/
+    if (!strcmp(goal, "sym")) /*why we need to negate????????????????????????*/
         print_matrix(A, N, N);
 
     if (!strcmp(goal, "ddg"))
@@ -75,29 +67,40 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+/**
+ * read_data_points - Reads data points from a file and organizes them into a linked list of vectors.
+ *
+ * @param file_name: The name of the file to read data from.
+ *
+ * @return A pointer to the head of the linked list of vectors.
+ */
 struct vector* read_data_points(char* file_name){
 
+    /* Open the file for reading */
     FILE *ifp = NULL;
+    ifp = fopen(file_name, "r" );
+
+    /* Initialize variables */
     struct vector *head_vec, *curr_vec;
     struct entry *head_entry, *curr_entry;
     double n;
     char c;
 
-    ifp = fopen(file_name, "r" );
-
+    /* Allocate memory for the first entry and vector */
     head_entry = malloc(sizeof(struct entry));
     if (head_entry == NULL)     /* Memory allocation failed */
-        mem_error();
+        print_error();
     curr_entry = head_entry;
     curr_entry->next = NULL;
 
     curr_vec = malloc(sizeof(struct vector));
     if (curr_vec == NULL)       /* Memory allocation failed */
-        mem_error();
+        print_error();
     curr_vec->next = NULL;
     head_vec = curr_vec;
     backup_vectors = head_vec;
 
+    /* Read data from the file */
     while (fscanf(ifp, "%lf%c", &n, &c) == 2) {
 
         /* We have read all the entries for the current vector */
@@ -107,12 +110,12 @@ struct vector* read_data_points(char* file_name){
             curr_vec->entries = head_entry;
             curr_vec->next = calloc(1, sizeof(struct vector));
             if (curr_vec->next == NULL)     /* Memory allocation failed */
-                mem_error();
+                print_error();
             curr_vec = curr_vec->next;
             curr_vec->next = NULL;
             head_entry = malloc(sizeof(struct entry));
             if (head_entry == NULL)         /* Memory allocation failed */
-                mem_error();
+                print_error();
             curr_entry = head_entry;
             curr_entry->next = NULL;
 
@@ -125,7 +128,7 @@ struct vector* read_data_points(char* file_name){
         curr_entry->value = n;
         curr_entry->next = malloc(sizeof(struct entry));
         if (curr_entry == NULL)         /* Memory allocation failed */
-            mem_error();
+            print_error();
         curr_entry = curr_entry->next;
         curr_entry->next = NULL;
 
@@ -134,22 +137,39 @@ struct vector* read_data_points(char* file_name){
             d++;
     }
 
+    /* Clean up and return */
     free_entries(head_entry);
     fclose(ifp);
 
     return head_vec;
 }
 
+/**
+ * compute_similarity_matrix - Computes the similarity matrix based on the given vectors.
+ *
+ * @param vectors: Pointer to the linked list of vectors.
+ * @param N_: Number of vectors.
+ * @param d_: Dimension of the vectors.
+ *
+ * @return A 2D array representing the similarity matrix.
+ */
 double** compute_similarity_matrix(struct vector* vectors, int N_, int d_) {
+
+    /* Initialize variables */
     int i = 0, j = 0;
     struct vector *vec_i = vectors, *vec_j = vectors;
     double **A;
+
+    /* Set global variables N and d */
     N = N_;
     d = d_;
+
+    /* Allocate memory for the similarity matrix */
     A = (double **) malloc(N * sizeof(double *));
     if (A == NULL)      /* Memory allocation failed */
-        mem_error();
+        print_error();
 
+    /* Compute the entries of the matrix */
     for (; i < N; vec_i = vec_i->next, i++) {
         A[i] = (double *) malloc(N * sizeof(double));
         for (j = 0; j < N; vec_j = vec_j->next, j++) {
@@ -164,12 +184,22 @@ double** compute_similarity_matrix(struct vector* vectors, int N_, int d_) {
     return A;
 }
 
+/**
+ * compute_degree_matrix - Computes the degree matrix based on the similarity matrix.
+ *
+ * @param A: The similarity matrix.
+ *
+ * @return A 1D array representing the degree matrix.
+ */
 double* compute_degree_matrix(double** A) {
+
+    /* Initialize variables */
     int i = 0, j = 0;
     double *D = (double *)malloc(N * sizeof(double));
     if (D == NULL)      /* Memory allocation failed */
-        mem_error();
+        print_error();
 
+    /* Compute the values of the matrix */
     for (; i < N; i++) {
         D[i] = 0.0;
         for (j = 0; j < N; j++)
@@ -178,21 +208,30 @@ double* compute_degree_matrix(double** A) {
     return D;
 }
 
+/**
+ * compute_laplacian_matrix - Computes the Laplacian matrix based on the similarity matrix and degree matrix.
+ *
+ * @param A: The similarity matrix.
+ * @param D: The degree matrix.
+ *
+ * @return A 2D array representing the Laplacian matrix.
+ */
 double** compute_laplacian_matrix(double** A, double* D) {
-    int i = 0;
 
+    /* Initialize variables */
+    int i = 0;
     double **intermediate;
     double **W;
 
     /* Compute D^{-1/2} as a diagonal matrix */
     double** D_inv_sqrt = (double**)malloc(N * sizeof(double*));
     if (D_inv_sqrt == NULL)      /* Memory allocation failed */
-        mem_error();
+        print_error();
 
     for (; i < N; i++) {
         D_inv_sqrt[i] = (double*)calloc(N, sizeof(double));
         if (D_inv_sqrt[i] == NULL)      /* Memory allocation failed */
-            mem_error();
+            print_error();
         D_inv_sqrt[i][i] = 1.0 / sqrt(D[i]);
     }
 
@@ -209,7 +248,19 @@ double** compute_laplacian_matrix(double** A, double* D) {
     return W;
 }
 
+/**
+ * optimize_H - Optimizes the matrix H using the provided rule.
+ *
+ * @param W: The matrix W.
+ * @param H: The matrix H to be optimized.
+ * @param n: Number of rows in H.
+ * @param k: Number of columns in H.
+ *
+ * @return The optimized matrix H.
+ */
 double** optimize_H(double** W, double** H, int n, int k) {
+
+    /* Initialize variables */
     int i = 0, j = 0;
     double** H_transpose = transpose(H, n, k);
     double** temp1 = NULL;
@@ -218,13 +269,15 @@ double** optimize_H(double** W, double** H, int n, int k) {
     double** H_prev = (double**)malloc(n * sizeof(double*));
     int iteration;
     double diff;
+
+    /* Check for memory allocation failure */
     if (H_prev == NULL)
-        mem_error();
+        print_error();
 
     for (; i < n; i++) {
         H_prev[i] = (double*)malloc(k * sizeof(double));
         if (H_prev[i] == NULL)
-            mem_error();
+            print_error();
     }
 
     iteration = 0;
@@ -271,11 +324,19 @@ double** optimize_H(double** W, double** H, int n, int k) {
     return H;
 }
 
-void mem_error(void) {
+/**
+ * print_error - Prints an error message and exits the program.
+ */
+void print_error(void) {
     printf("An Error Has Occurred\n");
     exit(1);
 }
 
+/**
+ * free_vectors - Frees memory allocated for a linked list of vectors and its entries.
+ *
+ * @param head: Pointer to the head of the linked list.
+ */
 void free_vectors(struct vector *head) {
     if (head != NULL){
         free_entries(head->entries);
@@ -286,6 +347,11 @@ void free_vectors(struct vector *head) {
     backup_vectors = head;
 }
 
+/**
+ * free_entries - Frees memory allocated for a vector.
+ *
+ * @param head: Pointer to the head of the linked list.
+ */
 void free_entries(struct entry *head) {
     if (head != NULL){
         free_entries(head->next);
@@ -294,6 +360,12 @@ void free_entries(struct entry *head) {
     head = NULL;
 }
 
+/**
+ * free_matrix - Frees memory allocated for a 2D matrix.
+ *
+ * @param matrix: Pointer to the 2D matrix.
+ * @param rows: Number of rows in the matrix.
+ */
 void free_matrix(double **matrix, int rows) {
     int i = 0;
     for (; i < rows; i++)
@@ -301,6 +373,14 @@ void free_matrix(double **matrix, int rows) {
     free(matrix);
 }
 
+/**
+ * print_matrix - Prints a 2D matrix of doubles to the console.
+ *
+ * @param matrix: A pointer to a 2D array of doubles (matrix).
+ * @param rows: The number of rows in the matrix.
+ * @param cols: The number of columns in the matrix.
+ *
+ */
 void print_matrix(double **matrix, int rows, int cols) {
     int i = 0, j = 0;
     for (; i < rows; i++) {
@@ -313,6 +393,13 @@ void print_matrix(double **matrix, int rows, int cols) {
     }
 }
 
+/**
+ * print_diagonal_matrix - Prints a diagonal matrix represented as a 1D array of doubles.
+ *
+ * @param diagonal: A pointer to a 1D array of doubles representing the diagonal elements.
+ * @param size: The size of the diagonal matrix (number of rows and columns).
+ *
+ */
 void print_diagonal_matrix(double *diagonal, int size) {
     int i = 0, j = 0;
     for (; i < size; i++) {
@@ -328,6 +415,14 @@ void print_diagonal_matrix(double *diagonal, int size) {
     }
 }
 
+/**
+ * squared_dist - Calculates the squared Euclidean distance between two vectors.
+ *
+ * @param u: A struct representing the first vector.
+ * @param v: A struct representing the second vector.
+ *
+ * @return The Euclidean distance between u and v.
+ */
 double squared_dist(struct vector u, struct vector v) {
     int i = 0;
 
@@ -344,16 +439,28 @@ double squared_dist(struct vector u, struct vector v) {
     return sum;
 }
 
+/**
+ * matrix_multiply - Multiplies two matrices A and B and returns the resulting matrix C.
+ *
+ * @param A: The first matrix represented as a 2D array of doubles.
+ * @param B: The second matrix represented as a 2D array of doubles.
+ * @param m: The number of rows in matrix A.
+ * @param n: The number of columns in matrix A (number of rows in matrix B).
+ * @param p: The number of columns in matrix B.
+ *
+ * @return A pointer to the resulting matrix C.
+ *
+ */
 double** matrix_multiply(double** A, double** B, int m, int n, int p) {
     int i = 0, j = 0, l = 0;
     double **C = (double **) malloc(m * sizeof(double*));
     if (C == NULL)         /* Memory allocation failed */
-        mem_error();
+        print_error();
 
     for (; i < m; i++) {
         C[i] = (double *) malloc(m * sizeof(double));
         if (C[i] == NULL)         /* Memory allocation failed */
-            mem_error();
+            print_error();
 
         for (j = 0; j < p; j++) {
             C[i][j] = 0.0;
@@ -364,16 +471,25 @@ double** matrix_multiply(double** A, double** B, int m, int n, int p) {
     return C;
 }
 
+/**
+ * transpose - Computes the transpose of a matrix.
+ *
+ * @param matrix    A pointer to a 2D array of doubles representing the original matrix.
+ * @param rows      The number of rows in the original matrix.
+ * @param cols      The number of columns in the original matrix.
+ *
+ * @return A pointer to the transposed matrix.
+ */
 double** transpose(double** matrix, int rows, int cols) {
     int i = 0, j = 0;
     double **transposed = (double**)malloc(cols * sizeof(double*));
     if (transposed == NULL)
-        mem_error();
+        print_error();
 
     for (; i < cols; i++) {
         transposed[i] = (double*)malloc(rows * sizeof(double));
         if (transposed[i] == NULL)
-            mem_error();
+            print_error();
 
         for (j = 0; j < rows; j++)
             transposed[i][j] = matrix[j][i];
@@ -382,6 +498,12 @@ double** transpose(double** matrix, int rows, int cols) {
     return transposed;
 }
 
+/**
+ * print_vectors - Prints a list of vectors represented as linked lists of entries.
+ *
+ * @param vectors   A pointer to the first vector in the list.
+ *
+ */
 void print_vectors(struct vector *vectors) {
     struct vector* curr_vec = vectors;
 
@@ -397,6 +519,12 @@ void print_vectors(struct vector *vectors) {
     }
 }
 
+/**
+ * print_vector - Prints a vector represented as a linked list of entries.
+ *
+ * @param vector    A struct representing the vector.
+ *
+ */
 void print_vector(struct vector vector) {
     struct entry* entry = vector.entries;
     while (entry != NULL) {

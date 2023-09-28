@@ -16,7 +16,7 @@ double** compute_laplacian_matrix(double** A, double* D);
 double** optimize_H(double** W, double** H, int n, int k);
 
 /* behind the scenes code*/
-void mem_error(void);
+void print_error(void);
 void free_entries(struct entry *head);
 void free_vectors(struct vector *head);
 void free_matrix(double** matrix, int rows);
