@@ -78,13 +78,13 @@ struct vector* read_data_points(char* file_name){
 
     /* Open the file for reading */
     FILE *ifp = NULL;
-    ifp = fopen(file_name, "r" );
 
     /* Initialize variables */
     struct vector *head_vec, *curr_vec;
     struct entry *head_entry, *curr_entry;
     double n;
     char c;
+    ifp = fopen(file_name, "r" );
 
     /* Allocate memory for the first entry and vector */
     head_entry = malloc(sizeof(struct entry));
